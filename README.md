@@ -18,7 +18,7 @@ adb push ../iree-build-android/iree/tools/ "${atmp?}/iree/"
 ### Compile Training
 
 ```shell
-python -m jax_training.compile_mnist_dnn
+python -m iree_jax.compile_mnist_dnn
 adb push /tmp/iree/training "${atmp?}/iree/"
 ```
 
