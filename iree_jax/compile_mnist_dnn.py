@@ -1,4 +1,4 @@
-"""python -m jax_training.compile_mnist_dnn"""
+"""python -m iree_jax.compile_mnist_dnn"""
 
 import pyiree as iree
 import pyiree.jax
@@ -9,7 +9,7 @@ import flax
 from flax import linen as nn
 import numpy as np
 
-import jax_training
+import iree_jax
 
 
 class Network(nn.Module):
@@ -38,8 +38,8 @@ def update(optimizer, batch):
 
 
 def main():
-  images, labels = jax_training.get_random_data((32, 28, 28, 1))
-  jax_training.compile_model(model_class=Network,
+  images, labels = iree_jax.get_random_data((32, 28, 28, 1))
+  iree_jax.compile_model(model_class=Network,
                              model_name="mnist_dnn",
                              update=update,
                              images=images,
