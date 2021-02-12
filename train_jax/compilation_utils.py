@@ -15,16 +15,19 @@ import numpy as np
 __all__ = [
     "ANDROID_OPTIONS",
     "OPTIMIZERS_TO_HPARAMS",
-    "compile_model",
+    "compile_apply",
+    "compile_update",
     "get_jax_mlir_types",
     "get_jax_serialized_data",
     "get_random_data",
 ]
 
+TOLERANCES = dict(atol=1e-4, rtol=1e-4)
+
 OPTIMIZERS_TO_HPARAMS = {
+    "GradientDescent": dict(learning_rate=1e-2),
     "Adam": dict(learning_rate=1e-3, weight_decay=1e-1),
     "Adagrad": dict(learning_rate=1e-3),
-    "GradientDescent": dict(learning_rate=1e-2),
     "LAMB": dict(learning_rate=1e-3, weight_decay=1e-1),
     "LARS": dict(learning_rate=1e-3, weight_decay=1e-1),
     "Momentum": dict(learning_rate=1e-3, weight_decay=1e-1),
@@ -81,60 +84,127 @@ def get_jax_serialized_data(*args, **kwargs):
   return data
 
 
-def get_random_data(batched_shape):
+def get_random_data(batch_size: int, image_shape: Tuple[int], classes: int):
   np.random.seed(0)
+  batched_shape = (batch_size,) + image_shape
   images = np.random.uniform(0, 1, batched_shape).astype(np.float32)
-  labels = np.random.choice(10, batched_shape[0]).astype(np.int32)
+  labels = np.random.choice(classes, batch_size).astype(np.int32)
   return images, labels
 
 
-def compile_model(model_class,
-                  model_name,
-                  update,
-                  images,
-                  labels,
-                  base_dir="/tmp/iree/training"):
+def compile_update(model_name,
+                   model_variables,
+                   update,
+                   images,
+                   labels,
+                   base_dir="/tmp/iree-training/update"):
   model_path = os.path.join(base_dir, model_name)
   os.makedirs(model_path, exist_ok=True)
 
-  variables = model_class().init(jax.random.PRNGKey(0), images)
   for opt_name, hparams in OPTIMIZERS_TO_HPARAMS.items():
-    print(f"Compiling: {opt_name}")
+    print(f"\nCompiling: {opt_name}")
     optimizer_def = getattr(flax.optim, opt_name)(**hparams)
-    optimizer = optimizer_def.create(variables)
+    optimizer = optimizer_def.create(model_variables)
     args = [optimizer, [images, labels]]
 
     # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
+    print("Getting mlir_types")
     mlir_types = get_jax_mlir_types(*args)
     with open(os.path.join(model_path, f"{opt_name}.mlir_types"), "w") as f:
       f.write("\n".join(mlir_types))
 
     # Save a OptName.data file that can be passed via `--function_inputs_file`
     # for numerical validation.
+    print("Getting serialized inputs")
     data = get_jax_serialized_data(*args)
     with open(os.path.join(model_path, f"{opt_name}.data"), "w") as f:
       f.write("\n".join(data))
 
     # Save a OptName.expected file that can be used to numerically verify IREE
     # running on Android.
+    print("Getting expected results")
     expected_results = update(*args)
-    expected_data = get_jax_serialized_data(*expected_results)
+    expected_data = get_jax_serialized_data(expected_results)
     with open(os.path.join(model_path, f"{opt_name}.expected"), "w") as f:
       f.write("\n".join(expected_data))
 
+    # Export the MLIR-HLO for debugging purposes.
+    print("Exporting MLIR-HLO")
+    iree.jax.aot(update,
+                 *args,
+                 import_only=True,
+                 output_file=os.path.join(model_path, f"{opt_name}.mlir"))
+
     # Validate the host execution correctness.
+    print("Validating IREE host execution correctness")
     iree_update = iree.jax.jit(update)
     host_results = iree_update(*args)
     host_values, _ = jax.tree_flatten(host_results)
     expected_values, _ = jax.tree_flatten(expected_results)
     for host_value, expected_value in zip(host_values, expected_values):
+      print(np.max(np.abs(host_value - expected_value)))
       np.testing.assert_allclose(host_value,
                                  expected_value,
-                                 rtol=1e-5,
-                                 atol=1e-5)
+                                 **TOLERANCES)
 
     # Compile the model for Android and save the compiled flatbuffer.
+    print("Compiling for Android")
     iree.jax.aot(update,
                  *args,
                  output_file=os.path.join(model_path, f"{opt_name}.vmfb"),
                  **ANDROID_OPTIONS)
+
+
+def compile_apply(model_name,
+                  model_variables,
+                  apply,
+                  images,
+                  base_dir="/tmp/iree-training/apply"):
+  print(f"\nCompiling {model_name}.apply")
+  os.makedirs(base_dir, exist_ok=True)
+  args = [model_variables, images]
+
+  # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
+  print("Getting mlir_types")
+  mlir_types = get_jax_mlir_types(*args)
+  with open(os.path.join(base_dir, f"{model_name}.mlir_types"), "w") as f:
+    f.write("\n".join(mlir_types))
+
+  # Save a OptName.data file that can be passed via `--function_inputs_file`
+  # for numerical validation.
+  print("Getting serialized inputs")
+  data = get_jax_serialized_data(*args)
+  with open(os.path.join(base_dir, f"{model_name}.data"), "w") as f:
+    f.write("\n".join(data))
+
+  # Save a OptName.expected file that can be used to numerically verify IREE
+  # running on Android.
+  print("Getting expected results")
+  expected_results = apply(*args)
+  expected_data = get_jax_serialized_data(expected_results)
+  with open(os.path.join(base_dir, f"{model_name}.expected"), "w") as f:
+    f.write("\n".join(expected_data))
+
+  # Export the MLIR-HLO for debugging purposes.
+  print("Exporting MLIR-HLO")
+  iree.jax.aot(apply,
+               *args,
+               import_only=True,
+               output_file=os.path.join(base_dir, f"{model_name}.mlir"))
+
+  # Validate the host execution correctness.
+  print("Validating IREE host execution correctness")
+  iree_apply = iree.jax.jit(apply)
+  host_results = iree_apply(*args)
+  host_values, _ = jax.tree_flatten(host_results)
+  expected_values, _ = jax.tree_flatten(expected_results)
+  for host_value, expected_value in zip(host_values, expected_values):
+    print(np.max(np.abs(host_value - expected_value)))
+    np.testing.assert_allclose(host_value, expected_value, **TOLERANCES)
+
+  # Compile the model for Android and save the compiled flatbuffer.
+  print("Compiling for Android")
+  iree.jax.aot(apply,
+               *args,
+               output_file=os.path.join(base_dir, f"{model_name}.vmfb"),
+               **ANDROID_OPTIONS)
