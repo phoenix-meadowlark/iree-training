@@ -7,7 +7,7 @@ import flax.linen as nn
 
 
 def global_average_pooling(x):
-  return jnp.apply_over_axes(jnp.mean, x, (1, 2))
+  return jnp.mean(x, axis=(1, 2))
 
 
 def flatten(x):
