@@ -6,6 +6,14 @@ The experimental parameters are controlled by constants at the top of
 `script.js`. `TFJS_BACKEND` and `OPTIMIZER` are the only parameters modified for
 the experiments in the paper.
 
+## Chrome Flags for WASM
+
+WASM multithreading can be disabled using the `MULTI_THREAD` variable at the top
+of `script.js`, but must be enabled in
+`chrome://flags#enable-webassembly-threads` for it to work.
+
+WASM SIMD support can be toggled by `chrome://flags#enable-webassembly-simd`.
+
 ## Benchmarking Locally
 
 The benchmarks can be executed locally by opening `index.html` in your browser.

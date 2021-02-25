@@ -1,5 +1,6 @@
 // Experiment Parameters
 const TFJS_BACKEND = "wasm";
+const MULTI_THREAD = true;
 
 const BENCHMARK_ITERATIONS = 1000;
 const MS_BETWEEN_ITERATIONS = 0;
@@ -195,6 +196,7 @@ async function benchmarkMobileNet() {
 }
 
 tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
+tf.env().set('WASM_HAS_MULTITHREAD_SUPPORT', MULTI_THREAD)
 tf.setBackend(TFJS_BACKEND).then(async () => {
   console.log("TF.js backend:         " + tf.getBackend());
   console.log("TF.js version:         " + tf.version.tfjs);
