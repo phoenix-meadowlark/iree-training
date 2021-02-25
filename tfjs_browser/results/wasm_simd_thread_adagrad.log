@@ -1,0 +1,52 @@
+script.js:25 model_name:            mnist_dnn
+script.js:26 batch_size:            32
+script.js:27 optimizer:             adagrad
+script.js:28 benchmark_iterations:  1000
+script.js:29 ms_between_iterations: 0
+script.js:199 TF.js backend:         wasm
+script.js:200 TF.js version:         3.2.0
+script.js:159 Benhcmarking mnist_dnn.trainOnBatch
+script.js:122 compiling model.trainOnBatch
+util_base.js:521 Uncaught (in promise) Error: Unknown dtype undefined
+    at Object.Ev [as bytesPerElement] (util_base.js:521)
+    at BackendWasm.move (backend_wasm.ts:81)
+    at BackendWasm.write (backend_wasm.ts:53)
+    at BackendWasm.makeOutput (backend_wasm.ts:179)
+    at Object.fill [as kernelFunc] (Fill.ts:25)
+    at n (engine.js:636)
+    at engine.js:703
+    at e.t.scopedRun (engine.js:478)
+    at e.t.runKernelFunc (engine.js:699)
+    at e.t.runKernel (engine.js:543)
+Ev @ util_base.js:521
+BackendWasm.move @ backend_wasm.ts:81
+BackendWasm.write @ backend_wasm.ts:53
+BackendWasm.makeOutput @ backend_wasm.ts:179
+fill @ Fill.ts:25
+n @ engine.js:636
+(anonymous) @ engine.js:703
+t.scopedRun @ engine.js:478
+t.runKernelFunc @ engine.js:699
+t.runKernel @ engine.js:543
+Yw @ fill.js:42
+(anonymous) @ adagrad_optimizer.js:55
+(anonymous) @ engine.js:467
+t.scopedRun @ engine.js:478
+t.tidy @ engine.js:465
+vx @ globals.js:192
+(anonymous) @ adagrad_optimizer.js:54
+n.applyGradients @ adagrad_optimizer.js:48
+n.minimize @ optimizer.js:66
+(anonymous) @ training.js:1371
+(anonymous) @ training.js:1525
+u @ runtime.js:45
+(anonymous) @ runtime.js:274
+forEach.e.<computed> @ runtime.js:97
+Um @ runtime.js:728
+o @ runtime.js:728
+async function (async)
+benchmarkModel @ script.js:160
+benchmarkMnistDnn @ script.js:179
+(anonymous) @ script.js:203
+Promise.then (async)
+(anonymous) @ script.js:198
