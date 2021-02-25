@@ -10,7 +10,7 @@ const BENCHMARK_TRAIN_ON_BATCH = true;
 
 const MODEL_NAME = "mnist_dnn";
 const BATCH_SIZE = 32;
-const OPTIMIZER = "rmsprop";
+const OPTIMIZER = "sgd";
 const LEARNING_RATE = 0.01; // Should have not effect.
 const OPTIMIZERS = {
   sgd: tf.train.sgd(LEARNING_RATE),

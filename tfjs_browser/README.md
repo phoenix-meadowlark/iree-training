@@ -1,5 +1,11 @@
 # TF.js Latency Benchmarks
 
+## Experiemntal Parameters
+
+The experimental parameters are controlled by constants at the top of
+`script.js`. `TFJS_BACKEND` and `OPTIMIZER` are the only parameters modified for
+the experiments in the paper.
+
 ## Benchmarking Locally
 
 The benchmarks can be executed locally by opening `index.html` in your browser.
