@@ -36,6 +36,6 @@ python -m http.server 8000
 ```
 
 Open `chrome://inspect/#devices` in desktop Chrome, open
-`https://localhost:8000` in your phone's Chrome browser, and use desktop Chrome
+`http://localhost:8000` in your phone's Chrome browser, and use desktop Chrome
 to view the `console.log` calls. The logs can be saved by right clicking and
 selecting `Save as...`, or the results can be copied directly for analysis.
