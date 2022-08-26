@@ -109,33 +109,8 @@ def compile_update(model_name, model_variables, update, images, labels):
     optimizer = optimizer_def.create(model_variables)
     args = [optimizer, [images, labels]]
 
-    # # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
-    # print("Getting mlir_types")
-    # mlir_types = get_jax_mlir_types(*args)
-    # with open(os.path.join(model_path, f"{opt_name}.mlir_types"), "w") as f:
-    #   f.write("\n".join(mlir_types))
-
-    # # Save a OptName.data file that can be passed via `--function_inputs_file`
-    # # for numerical validation.
-    # print("Getting serialized inputs")
-    # data = get_jax_serialized_data(*args)
-    # with open(os.path.join(model_path, f"{opt_name}.data"), "w") as f:
-    #   f.write("\n".join(data))
-
-    # Save a OptName.expected file that can be used to numerically verify IREE
-    # running on Android.
     print("Getting expected results")
     expected_results = update(*args)
-    # expected_data = get_jax_serialized_data(expected_results)
-    # with open(os.path.join(model_path, f"{opt_name}.expected"), "w") as f:
-    #   f.write("\n".join(expected_data))
-
-    # Export the MLIR-HLO for debugging purposes.
-    # print("Exporting MLIR-HLO")
-    # iree.jax.aot(update,
-    #              *args,
-    #              import_only=True,
-    #              output_file=os.path.join(model_path, f"{opt_name}.mlir"))
 
     # Validate the host execution correctness.
     print("Validating IREE host execution correctness")
@@ -146,13 +121,6 @@ def compile_update(model_name, model_variables, update, images, labels):
     for host_value, expected_value in zip(host_values, expected_values):
       print(np.max(np.abs(host_value - expected_value)))
       np.testing.assert_allclose(host_value, expected_value, **TOLERANCES)
-
-    # Compile the model for Android and save the compiled flatbuffer.
-    # print("Compiling for Android")
-    # iree.jax.aot(update,
-    #              *args,
-    #              output_file=os.path.join(model_path, f"{opt_name}.vmfb"),
-    #              **ANDROID_OPTIONS)
 
 
 def compile_apply(model_name, model_variables, apply, images):
