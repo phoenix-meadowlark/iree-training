@@ -161,33 +161,8 @@ def compile_apply(model_name, model_variables, apply, images):
   os.makedirs(model_path, exist_ok=True)
   args = [model_variables, images]
 
-  # # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
-  # print("Getting mlir_types")
-  # mlir_types = get_jax_mlir_types(*args)
-  # with open(os.path.join(model_path, f"apply.mlir_types"), "w") as f:
-  #   f.write("\n".join(mlir_types))
-
-  # # Save a OptName.data file that can be passed via `--function_inputs_file`
-  # # for numerical validation.
-  # print("Getting serialized inputs")
-  # data = get_jax_serialized_data(*args)
-  # with open(os.path.join(model_path, f"apply.data"), "w") as f:
-  #   f.write("\n".join(data))
-
-  # Save a OptName.expected file that can be used to numerically verify IREE
-  # running on Android.
   print("Getting expected results")
   expected_results = apply(*args)
-  # expected_data = get_jax_serialized_data(expected_results)
-  # with open(os.path.join(model_path, f"apply.expected"), "w") as f:
-  #   f.write("\n".join(expected_data))
-
-  # Export the MLIR-HLO for debugging purposes.
-  # print("Exporting MLIR-HLO")
-  # iree.jax.aot(apply,
-  #              *args,
-  #              import_only=True,
-  #              output_file=os.path.join(model_path, f"apply.mlir"))
 
   # Validate the host execution correctness.
   print("Validating IREE host execution correctness")
@@ -198,10 +173,3 @@ def compile_apply(model_name, model_variables, apply, images):
   for host_value, expected_value in zip(host_values, expected_values):
     print(np.max(np.abs(host_value - expected_value)))
     np.testing.assert_allclose(host_value, expected_value, **TOLERANCES)
-
-  # Compile the model for Android and save the compiled flatbuffer.
-  # print("Compiling for Android")
-  # iree.jax.aot(apply,
-  #              *args,
-  #              output_file=os.path.join(model_path, f"apply.vmfb"),
-  #              **ANDROID_OPTIONS)
