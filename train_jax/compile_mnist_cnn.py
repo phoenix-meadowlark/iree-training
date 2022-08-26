@@ -1,15 +1,13 @@
 """python -m train_jax.compile_mnist_dnn"""
 
-import pyiree as iree
-import pyiree.jax
-
+from absl import app
 import jax
 import jax.numpy as jnp
 import flax
 from flax import linen as nn
 import numpy as np
 
-import train_jax
+from . import compilation_utils
 
 BATCH_SIZE = 32
 IMAGE_SHAPE = (28, 28, 1)
@@ -50,22 +48,23 @@ def update(optimizer, batch):
   return optimizer, loss
 
 
-def main():
-  images, labels = train_jax.get_random_data(BATCH_SIZE, IMAGE_SHAPE, CLASSES)
+def main(argv):
+  images, labels = compilation_utils.get_random_data(BATCH_SIZE, IMAGE_SHAPE,
+                                                     CLASSES)
   module = CNN()
   variables = module.init(jax.random.PRNGKey(0), images)
 
-  train_jax.compile_apply(model_name="mnist_cnn",
-                          model_variables=variables,
-                          apply=module.apply,
-                          images=images)
+  compilation_utils.compile_apply(model_name="mnist_cnn",
+                                  model_variables=variables,
+                                  apply=module.apply,
+                                  images=images)
 
-  train_jax.compile_update(model_name="mnist_cnn",
-                           model_variables=variables,
-                           update=update,
-                           images=images,
-                           labels=labels)
+  compilation_utils.compile_update(model_name="mnist_cnn",
+                                   model_variables=variables,
+                                   update=update,
+                                   images=images,
+                                   labels=labels)
 
 
 if __name__ == "__main__":
-  main()
+  app.run(main)

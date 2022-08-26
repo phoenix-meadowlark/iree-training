@@ -1,8 +1,6 @@
 """python -m train_jax.compile_mnist_dnn"""
 
-import pyiree as iree
-import pyiree.jax
-
+from absl import app
 import jax
 import jax.numpy as jnp
 import flax
@@ -41,17 +39,17 @@ def update(optimizer, batch):
   return optimizer, loss
 
 
-def main():
+def main(argv):
   images, labels = train_jax.get_random_data(BATCH_SIZE, IMAGE_SHAPE, CLASSES)
   module = DNN()
   variables = module.init(jax.random.PRNGKey(0), images)
 
-  train_jax.compile_apply(model_name="mnist_dnn",
+  train_jax.compile_apply(model_name="mnist_784x128x10",
                           model_variables=variables,
                           apply=module.apply,
                           images=images)
 
-  train_jax.compile_update(model_name="mnist_dnn",
+  train_jax.compile_update(model_name="mnist_784x128x10",
                            model_variables=variables,
                            update=update,
                            images=images,
@@ -59,4 +57,4 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  app.run(main)

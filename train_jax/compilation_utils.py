@@ -2,15 +2,20 @@ import itertools
 import os
 from typing import *
 
-import pyiree as iree
-import pyiree.jax
-import pyiree.rt
+from absl import flags
+# import iree as iree
+# import iree.jax
+# import iree.runtime
 
 import jax
 import jax.numpy as jnp
 import flax
 from flax import linen as nn
 import numpy as np
+
+flags.DEFINE_string("base_dir", "/tmp/", "The base directory to store compiled "
+                    "artifacts under.")
+FLAGS = flags.FLAGS
 
 __all__ = [
     "ANDROID_OPTIONS",
@@ -39,6 +44,8 @@ ANDROID_OPTIONS = {
     "extra_args": ["--iree-llvm-target-triple=aarch64-none-linux-android29"],
 }
 
+IREE_DEVICE = jax.devices("iree")[0]
+
 
 def _numpy_dtype_to_mlir_element_type(dtype: np.dtype) -> str:
   """Returns a string that denotes the type 'dtype' in MLIR style."""
@@ -55,7 +62,7 @@ def _numpy_dtype_to_mlir_element_type(dtype: np.dtype) -> str:
 
 
 def get_mlir_type(array: Any, allow_non_mlir_dtype: bool = True) -> str:
-  array = iree.rt.normalize_value(array)
+  array = iree.runtime.normalize_value(array)
   shape = "x".join([str(dim) for dim in array.shape])
   if np.issubdtype(array.dtype, np.number):
     element_type = _numpy_dtype_to_mlir_element_type(array.dtype)
@@ -68,7 +75,7 @@ def get_jax_mlir_types(*args, **kwargs):
   args_flat, _ = jax.tree_flatten((args, kwargs))
   types = []
   for arg in args_flat:
-    arg = iree.rt.normalize_value(arg)
+    arg = iree.runtime.normalize_value(arg)
     types.append(get_mlir_type(arg))
   return types
 
@@ -78,7 +85,7 @@ def get_jax_serialized_data(*args, **kwargs):
   args_flat, _ = jax.tree_flatten((args, kwargs))
   data = []
   for arg, mlir_type in zip(args_flat, types):
-    arg = np.ndarray.flatten(iree.rt.normalize_value(arg))
+    arg = np.ndarray.flatten(iree.runtime.normalize_value(arg))
     values = " ".join(str(v) for v in arg)
     data.append(f"{mlir_type}={values}")
   return data
@@ -92,13 +99,8 @@ def get_random_data(batch_size: int, image_shape: Tuple[int], classes: int):
   return images, labels
 
 
-def compile_update(model_name,
-                   model_variables,
-                   update,
-                   images,
-                   labels,
-                   base_dir="/tmp/iree-training/update"):
-  model_path = os.path.join(base_dir, model_name)
+def compile_update(model_name, model_variables, update, images, labels):
+  model_path = os.path.join(FLAGS.base_dir, "iree-training", model_name)
   os.makedirs(model_path, exist_ok=True)
 
   for opt_name, hparams in OPTIMIZERS_TO_HPARAMS.items():
@@ -107,95 +109,90 @@ def compile_update(model_name,
     optimizer = optimizer_def.create(model_variables)
     args = [optimizer, [images, labels]]
 
-    # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
-    print("Getting mlir_types")
-    mlir_types = get_jax_mlir_types(*args)
-    with open(os.path.join(model_path, f"{opt_name}.mlir_types"), "w") as f:
-      f.write("\n".join(mlir_types))
+    # # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
+    # print("Getting mlir_types")
+    # mlir_types = get_jax_mlir_types(*args)
+    # with open(os.path.join(model_path, f"{opt_name}.mlir_types"), "w") as f:
+    #   f.write("\n".join(mlir_types))
 
-    # Save a OptName.data file that can be passed via `--function_inputs_file`
-    # for numerical validation.
-    print("Getting serialized inputs")
-    data = get_jax_serialized_data(*args)
-    with open(os.path.join(model_path, f"{opt_name}.data"), "w") as f:
-      f.write("\n".join(data))
+    # # Save a OptName.data file that can be passed via `--function_inputs_file`
+    # # for numerical validation.
+    # print("Getting serialized inputs")
+    # data = get_jax_serialized_data(*args)
+    # with open(os.path.join(model_path, f"{opt_name}.data"), "w") as f:
+    #   f.write("\n".join(data))
 
     # Save a OptName.expected file that can be used to numerically verify IREE
     # running on Android.
     print("Getting expected results")
     expected_results = update(*args)
-    expected_data = get_jax_serialized_data(expected_results)
-    with open(os.path.join(model_path, f"{opt_name}.expected"), "w") as f:
-      f.write("\n".join(expected_data))
+    # expected_data = get_jax_serialized_data(expected_results)
+    # with open(os.path.join(model_path, f"{opt_name}.expected"), "w") as f:
+    #   f.write("\n".join(expected_data))
 
     # Export the MLIR-HLO for debugging purposes.
-    print("Exporting MLIR-HLO")
-    iree.jax.aot(update,
-                 *args,
-                 import_only=True,
-                 output_file=os.path.join(model_path, f"{opt_name}.mlir"))
+    # print("Exporting MLIR-HLO")
+    # iree.jax.aot(update,
+    #              *args,
+    #              import_only=True,
+    #              output_file=os.path.join(model_path, f"{opt_name}.mlir"))
 
     # Validate the host execution correctness.
     print("Validating IREE host execution correctness")
-    iree_update = iree.jax.jit(update)
-    host_results = iree_update(*args)
+    # iree_update = iree.jax.jit(update)
+    host_results = jax.jit(update, device=IREE_DEVICE)(*args)
     host_values, _ = jax.tree_flatten(host_results)
     expected_values, _ = jax.tree_flatten(expected_results)
     for host_value, expected_value in zip(host_values, expected_values):
       print(np.max(np.abs(host_value - expected_value)))
-      np.testing.assert_allclose(host_value,
-                                 expected_value,
-                                 **TOLERANCES)
+      np.testing.assert_allclose(host_value, expected_value, **TOLERANCES)
 
     # Compile the model for Android and save the compiled flatbuffer.
-    print("Compiling for Android")
-    iree.jax.aot(update,
-                 *args,
-                 output_file=os.path.join(model_path, f"{opt_name}.vmfb"),
-                 **ANDROID_OPTIONS)
+    # print("Compiling for Android")
+    # iree.jax.aot(update,
+    #              *args,
+    #              output_file=os.path.join(model_path, f"{opt_name}.vmfb"),
+    #              **ANDROID_OPTIONS)
 
 
-def compile_apply(model_name,
-                  model_variables,
-                  apply,
-                  images,
-                  base_dir="/tmp/iree-training/apply"):
+def compile_apply(model_name, model_variables, apply, images):
   print(f"\nCompiling {model_name}.apply")
-  os.makedirs(base_dir, exist_ok=True)
+  model_path = os.path.join(FLAGS.base_dir, "iree-training", model_name)
+  os.makedirs(model_path, exist_ok=True)
   args = [model_variables, images]
 
-  # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
-  print("Getting mlir_types")
-  mlir_types = get_jax_mlir_types(*args)
-  with open(os.path.join(base_dir, f"{model_name}.mlir_types"), "w") as f:
-    f.write("\n".join(mlir_types))
+  # # Save a OptName.mlir_types file that can be passed via `--function_inputs_file`
+  # print("Getting mlir_types")
+  # mlir_types = get_jax_mlir_types(*args)
+  # with open(os.path.join(model_path, f"apply.mlir_types"), "w") as f:
+  #   f.write("\n".join(mlir_types))
 
-  # Save a OptName.data file that can be passed via `--function_inputs_file`
-  # for numerical validation.
-  print("Getting serialized inputs")
-  data = get_jax_serialized_data(*args)
-  with open(os.path.join(base_dir, f"{model_name}.data"), "w") as f:
-    f.write("\n".join(data))
+  # # Save a OptName.data file that can be passed via `--function_inputs_file`
+  # # for numerical validation.
+  # print("Getting serialized inputs")
+  # data = get_jax_serialized_data(*args)
+  # with open(os.path.join(model_path, f"apply.data"), "w") as f:
+  #   f.write("\n".join(data))
 
   # Save a OptName.expected file that can be used to numerically verify IREE
   # running on Android.
   print("Getting expected results")
   expected_results = apply(*args)
-  expected_data = get_jax_serialized_data(expected_results)
-  with open(os.path.join(base_dir, f"{model_name}.expected"), "w") as f:
-    f.write("\n".join(expected_data))
+  # expected_data = get_jax_serialized_data(expected_results)
+  # with open(os.path.join(model_path, f"apply.expected"), "w") as f:
+  #   f.write("\n".join(expected_data))
 
   # Export the MLIR-HLO for debugging purposes.
-  print("Exporting MLIR-HLO")
-  iree.jax.aot(apply,
-               *args,
-               import_only=True,
-               output_file=os.path.join(base_dir, f"{model_name}.mlir"))
+  # print("Exporting MLIR-HLO")
+  # iree.jax.aot(apply,
+  #              *args,
+  #              import_only=True,
+  #              output_file=os.path.join(model_path, f"apply.mlir"))
 
   # Validate the host execution correctness.
   print("Validating IREE host execution correctness")
-  iree_apply = iree.jax.jit(apply)
-  host_results = iree_apply(*args)
+  # iree_apply = iree.jax.jit(apply)
+  host_results = jax.jit(apply, device=IREE_DEVICE)(*args)
   host_values, _ = jax.tree_flatten(host_results)
   expected_values, _ = jax.tree_flatten(expected_results)
   for host_value, expected_value in zip(host_values, expected_values):
@@ -203,8 +200,8 @@ def compile_apply(model_name,
     np.testing.assert_allclose(host_value, expected_value, **TOLERANCES)
 
   # Compile the model for Android and save the compiled flatbuffer.
-  print("Compiling for Android")
-  iree.jax.aot(apply,
-               *args,
-               output_file=os.path.join(base_dir, f"{model_name}.vmfb"),
-               **ANDROID_OPTIONS)
+  # print("Compiling for Android")
+  # iree.jax.aot(apply,
+  #              *args,
+  #              output_file=os.path.join(model_path, f"apply.vmfb"),
+  #              **ANDROID_OPTIONS)

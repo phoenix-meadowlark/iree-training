@@ -22,7 +22,7 @@ import functools
 import jax
 import flax.linen as nn
 
-from train_jax import nn_util
+from . import nn_util
 
 
 class MobileNetV1Block(nn.Module):
@@ -129,7 +129,7 @@ class MobileNetV1(nn.Module):
     if self.include_top:
       x = nn_util.global_average_pooling(x)
       x = x.reshape((-1, 1, 1, int(1024 * self.alpha)))
-      x = nn.Dropout(self.dropout)(x)
+      x = nn.Dropout(self.dropout, deterministic=True)(x)
       x = nn.Conv(features=self.classes, kernel_size=(1, 1), padding="same")(x)
       x = nn_util.flatten(x)
       x = self.classifier_activation(x)
