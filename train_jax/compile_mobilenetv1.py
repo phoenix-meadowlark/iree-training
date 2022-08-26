@@ -1,4 +1,4 @@
-"""python -m train_jax.compile_mnist_dnn"""
+"""python -m train_jax.compile_mobilenetv1"""
 
 from absl import app
 import jax
