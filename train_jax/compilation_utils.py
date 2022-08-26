@@ -114,7 +114,6 @@ def compile_update(model_name, model_variables, update, images, labels):
 
     # Validate the host execution correctness.
     print("Validating IREE host execution correctness")
-    # iree_update = iree.jax.jit(update)
     host_results = jax.jit(update, device=IREE_DEVICE)(*args)
     host_values, _ = jax.tree_flatten(host_results)
     expected_values, _ = jax.tree_flatten(expected_results)
@@ -134,7 +133,6 @@ def compile_apply(model_name, model_variables, apply, images):
 
   # Validate the host execution correctness.
   print("Validating IREE host execution correctness")
-  # iree_apply = iree.jax.jit(apply)
   host_results = jax.jit(apply, device=IREE_DEVICE)(*args)
   host_values, _ = jax.tree_flatten(host_results)
   expected_values, _ = jax.tree_flatten(expected_results)
